@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const WebCrawler = require('../crawler/WebCrawler');
-const emailService = require('./emailService');
+// Email service temporarily disabled
+// const emailService = require('./emailService');
 const { generateSessionId, setSession } = require('./sessionManager');
 
 class SchedulerService {
@@ -98,24 +99,24 @@ class SchedulerService {
 
       console.log(`✅ Scheduled crawl completed for ${job.domain}: ${crawler.pages.length} pages`);
 
-      // Send email report if recipients configured
-      if (job.emailRecipients && job.emailRecipients.length > 0) {
-        for (const recipient of job.emailRecipients) {
-          try {
-            await emailService.sendCrawlReport(recipient, {
-              domain: job.domain,
-              pagesFound: crawler.pages.length,
-              errors: crawler.errors.length,
-              startTime,
-              endTime,
-              sessionId,
-              pages: crawler.pages
-            });
-          } catch (err) {
-            console.error(`Failed to send email to ${recipient}:`, err.message);
-          }
-        }
-      }
+      // Email reports temporarily disabled
+      // if (job.emailRecipients && job.emailRecipients.length > 0) {
+      //   for (const recipient of job.emailRecipients) {
+      //     try {
+      //       await emailService.sendCrawlReport(recipient, {
+      //         domain: job.domain,
+      //         pagesFound: crawler.pages.length,
+      //         errors: crawler.errors.length,
+      //         startTime,
+      //         endTime,
+      //         sessionId,
+      //         pages: crawler.pages
+      //       });
+      //     } catch (err) {
+      //       console.error(`Failed to send email to ${recipient}:`, err.message);
+      //     }
+      //   }
+      // }
     } catch (error) {
       console.error(`❌ Scheduled crawl failed for ${job.domain}:`, error.message);
       job.status = 'failed';

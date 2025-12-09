@@ -156,21 +156,28 @@ class WebCrawler {
     const startUrl = this.normalizeUrl(this.baseUrl);
     this.toVisit.push(startUrl);
     
-    // Aggressive concurrency for high-RAM systems (96GB+)
+    // Conservative concurrency for free tier hosting (0.5 CPU, 512MB RAM)
     const cpuCount = os.cpus().length;
     const totalMemoryGB = os.totalmem() / (1024 ** 3);
     
     // Scale concurrency based on available resources
-    // For 96GB+ RAM: 200-400+ concurrent connections
     let concurrency;
     if (totalMemoryGB >= 64) {
-      concurrency = cpuCount * 25; // Aggressive scaling for high-RAM systems
+      concurrency = cpuCount * 20; // High-end systems
     } else if (totalMemoryGB >= 32) {
-      concurrency = cpuCount * 15;
+      concurrency = cpuCount * 12;
+    } else if (totalMemoryGB >= 8) {
+      concurrency = cpuCount * 5;
+    } else if (totalMemoryGB >= 2) {
+      concurrency = cpuCount * 3; // Medium systems
     } else {
-      concurrency = cpuCount * 10;
+      concurrency = Math.max(cpuCount * 2, 5); // Free tier: 5-10 concurrent
     }
-    concurrency = Math.max(concurrency, 200); // Minimum 200 for high-end systems
+    
+    // Cap concurrency for free tier to prevent overwhelming
+    if (totalMemoryGB < 2) {
+      concurrency = Math.min(concurrency, 10);
+    }
     
     // Adaptive rate limiting
     let consecutiveErrors = 0;
@@ -220,6 +227,14 @@ class WebCrawler {
               }
             }
           } else if (pageData.status === 'error') {
+            // Still add error pages to results
+            this.pages.push({
+              url: pageData.url,
+              title: pageData.title,
+              status: pageData.status,
+              error: pageData.error,
+              discoveredAt: new Date().toISOString()
+            });
             batchErrors++;
             // Detect rate limiting (429, 503, or too many errors)
             if (pageData.error && (pageData.error.includes('429') || pageData.error.includes('503') || pageData.error.includes('Too Many Requests'))) {
@@ -233,17 +248,17 @@ class WebCrawler {
       
       // Adaptive rate limiting: back off if too many errors
       const errorRate = batchErrors / batch.length;
-      if (rateLimitDetected || errorRate > 0.3) {
+      if (rateLimitDetected || errorRate > 0.5) {
         consecutiveErrors++;
-        dynamicConcurrency = Math.max(Math.floor(dynamicConcurrency * 0.5), 10); // Reduce concurrency by 50%
-        backoffDelay = Math.min(consecutiveErrors * 1000, 5000); // Up to 5 second delay
+        dynamicConcurrency = Math.max(Math.floor(dynamicConcurrency * 0.7), 3); // Reduce concurrency by 30%
+        backoffDelay = Math.min(consecutiveErrors * 500, 3000); // Up to 3 second delay
         console.log(`⚠️  Rate limiting detected. Reducing concurrency to ${dynamicConcurrency}, adding ${backoffDelay}ms delay`);
-      } else if (errorRate < 0.1) {
+      } else if (errorRate < 0.15 && consecutiveErrors > 0) {
         // Gradually recover concurrency if things are going well
         consecutiveErrors = Math.max(0, consecutiveErrors - 1);
         if (dynamicConcurrency < concurrency) {
-          dynamicConcurrency = Math.min(Math.floor(dynamicConcurrency * 1.2), concurrency);
-          backoffDelay = Math.max(0, backoffDelay - 500);
+          dynamicConcurrency = Math.min(Math.floor(dynamicConcurrency * 1.1), concurrency);
+          backoffDelay = Math.max(0, backoffDelay - 300);
         }
       }
       
@@ -291,8 +306,8 @@ class WebCrawler {
       
       console.log(`Retry attempt ${retryCount}/${this.maxRetries} for ${urlsToRetry.length} pages`);
       
-      // Process retries in larger batches for high-speed systems
-      const retryBatchSize = 50; // Increased from 10
+      // Process retries in smaller batches for compatibility
+      const retryBatchSize = 10;
       for (let i = 0; i < urlsToRetry.length; i += retryBatchSize) {
         if (!this.isRunning) break;
         
