@@ -117,7 +117,7 @@ router.get('/crawl/:sessionId/download', (req, res) => {
   const filterSuffix = filter === 'dead' ? '-dead-links' : filter === 'healthy' ? '-healthy-links' : '-all';
   
   res.setHeader('Content-Type', 'text/csv');
-  res.setHeader('Content-Disposition', `attachment; filename="crawl-results-${req.params.sessionId}${filterSuffix}.csv"`);
+  res.setHeader('Content-Disposition', `attachment; filename="imrn-crawler-results-${req.params.sessionId}${filterSuffix}.csv"`);
   res.send(csv);
 });
 
@@ -205,7 +205,7 @@ router.get('/crawl/:sessionId/sitemap', (req, res) => {
   const xml = xmlHeader + xmlUrls + '\n' + xmlFooter;
   
   res.setHeader('Content-Type', 'application/xml');
-  res.setHeader('Content-Disposition', `attachment; filename="sitemap-${type}-${priority}.xml"`);
+  res.setHeader('Content-Disposition', `attachment; filename="imrn-crawler-results-${req.params.sessionId}-sitemap-${type}-${priority}.xml"`);
   res.send(xml);
 });
 
