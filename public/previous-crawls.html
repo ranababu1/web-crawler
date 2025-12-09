@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Previous Crawls - Web Crawler</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      min-height: 100vh;
+    }
+    .glass {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .spinner {
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // IndexedDB Helper
+    const DB_NAME = 'WebCrawlerDB';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'crawls';
+
+    const initDB = () => {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+        
+        request.onupgradeneeded = (event) => {
+          const db = event.target.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            const objectStore = db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+            objectStore.createIndex('sessionId', 'sessionId', { unique: true });
+            objectStore.createIndex('timestamp', 'timestamp', { unique: false });
+            objectStore.createIndex('domain', 'domain', { unique: false });
+          }
+        };
+      });
+    };
+
+    const getAllCrawls = async () => {
+      const db = await initDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORE_NAME], 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.getAll();
+        
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    };
+
+    const deleteCrawl = async (id) => {
+      const db = await initDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.delete(id);
+        
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    };
+
+    function App() {
+      const [crawls, setCrawls] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [filter, setFilter] = useState('all'); // 'all', 'completed', 'stopped', 'running'
+      const [searchTerm, setSearchTerm] = useState('');
+
+      useEffect(() => {
+        loadCrawls();
+      }, []);
+
+      const loadCrawls = async () => {
+        try {
+          setLoading(true);
+          const data = await getAllCrawls();
+          setCrawls(data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
+        } catch (err) {
+          console.error('Failed to load crawls:', err);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const handleDelete = async (id) => {
+        if (confirm('Are you sure you want to delete this crawl?')) {
+          try {
+            await deleteCrawl(id);
+            setCrawls(crawls.filter(c => c.id !== id));
+          } catch (err) {
+            console.error('Failed to delete crawl:', err);
+            alert('Failed to delete crawl');
+          }
+        }
+      };
+
+      const filteredCrawls = crawls.filter(crawl => {
+        const matchesFilter = filter === 'all' || crawl.status === filter;
+        const matchesSearch = !searchTerm || 
+          crawl.domain.toLowerCase().includes(searchTerm.toLowerCase());
+        return matchesFilter && matchesSearch;
+      });
+
+      const stats = {
+        total: crawls.length,
+        completed: crawls.filter(c => c.status === 'completed').length,
+        stopped: crawls.filter(c => c.status === 'stopped').length,
+        running: crawls.filter(c => c.status === 'running').length,
+        totalPages: crawls.reduce((sum, c) => sum + (c.pagesFound || 0), 0)
+      };
+
+      return (
+        <div className="min-h-screen p-4 md:p-8">
+          <div className="max-w-7xl mx-auto">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
+              <div>
+                <h1 className="text-4xl md:text-5xl font-bold text-white mb-2">
+                  <i className="fas fa-history mr-3 text-purple-400"></i>
+                  Crawl History
+                </h1>
+                <p className="text-gray-400">View and manage all your previous crawls</p>
+              </div>
+              <a
+                href="/"
+                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold px-6 py-3 rounded-xl transition-all inline-flex items-center"
+              >
+                <i className="fas fa-home mr-2"></i>Back to Home
+              </a>
+            </div>
+
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+              <div className="glass rounded-xl p-4 text-center">
+                <div className="text-2xl font-bold text-purple-400">{stats.total}</div>
+                <div className="text-gray-400 text-sm">Total Crawls</div>
+              </div>
+              <div className="glass rounded-xl p-4 text-center">
+                <div className="text-2xl font-bold text-green-400">{stats.completed}</div>
+                <div className="text-gray-400 text-sm">Completed</div>
+              </div>
+              <div className="glass rounded-xl p-4 text-center">
+                <div className="text-2xl font-bold text-orange-400">{stats.stopped}</div>
+                <div className="text-gray-400 text-sm">Stopped</div>
+              </div>
+              <div className="glass rounded-xl p-4 text-center">
+                <div className="text-2xl font-bold text-blue-400">{stats.running}</div>
+                <div className="text-gray-400 text-sm">Running</div>
+              </div>
+              <div className="glass rounded-xl p-4 text-center">
+                <div className="text-2xl font-bold text-cyan-400">{stats.totalPages.toLocaleString()}</div>
+                <div className="text-gray-400 text-sm">Total Pages</div>
+              </div>
+            </div>
+
+            {/* Filters and Search */}
+            <div className="glass rounded-xl p-4 mb-6">
+              <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={() => setFilter('all')}
+                    className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                      filter === 'all'
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                    }`}
+                  >
+                    All ({crawls.length})
+                  </button>
+                  <button
+                    onClick={() => setFilter('completed')}
+                    className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                      filter === 'completed'
+                        ? 'bg-green-600 text-white'
+                        : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                    }`}
+                  >
+                    Completed ({stats.completed})
+                  </button>
+                  <button
+                    onClick={() => setFilter('stopped')}
+                    className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                      filter === 'stopped'
+                        ? 'bg-orange-600 text-white'
+                        : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                    }`}
+                  >
+                    Stopped ({stats.stopped})
+                  </button>
+                  <button
+                    onClick={() => setFilter('running')}
+                    className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                      filter === 'running'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                    }`}
+                  >
+                    Running ({stats.running})
+                  </button>
+                </div>
+                
+                <div className="relative w-full md:w-64">
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Search domains..."
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 pl-10 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                  />
+                  <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
+                </div>
+              </div>
+            </div>
+
+            {/* Crawls Table */}
+            {loading ? (
+              <div className="glass rounded-2xl p-12 text-center">
+                <i className="fas fa-spinner spinner text-4xl text-purple-400 mb-4"></i>
+                <p className="text-gray-400">Loading crawl history...</p>
+              </div>
+            ) : filteredCrawls.length === 0 ? (
+              <div className="glass rounded-2xl p-12 text-center">
+                <i className="fas fa-search text-6xl text-purple-400/50 mb-4"></i>
+                <h3 className="text-xl text-gray-300 mb-2">No crawls found</h3>
+                <p className="text-gray-500">
+                  {crawls.length === 0 
+                    ? 'Start your first crawl from the home page'
+                    : 'Try adjusting your filters or search term'}
+                </p>
+              </div>
+            ) : (
+              <div className="glass rounded-2xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-white/5">
+                      <tr>
+                        <th className="text-left text-gray-400 font-medium px-4 py-3 text-sm">Domain</th>
+                        <th className="text-left text-gray-400 font-medium px-4 py-3 text-sm">Started</th>
+                        <th className="text-left text-gray-400 font-medium px-4 py-3 text-sm">Status</th>
+                        <th className="text-left text-gray-400 font-medium px-4 py-3 text-sm">Pages Found</th>
+                        <th className="text-left text-gray-400 font-medium px-4 py-3 text-sm">Errors</th>
+                        <th className="text-left text-gray-400 font-medium px-4 py-3 text-sm">Duration</th>
+                        <th className="text-left text-gray-400 font-medium px-4 py-3 text-sm">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredCrawls.map((crawl) => {
+                        const startTime = new Date(crawl.timestamp);
+                        const endTime = crawl.completedAt ? new Date(crawl.completedAt) : 
+                                       crawl.stoppedAt ? new Date(crawl.stoppedAt) : null;
+                        const duration = endTime ? Math.round((endTime - startTime) / 1000) : null;
+                        
+                        return (
+                          <tr key={crawl.id} className="border-t border-white/5 hover:bg-white/5 transition-colors">
+                            <td className="px-4 py-3">
+                              <div className="text-blue-400 font-medium">{crawl.domain}</div>
+                              <div className="text-gray-500 text-xs">Session: {crawl.sessionId.substring(0, 8)}...</div>
+                            </td>
+                            <td className="px-4 py-3 text-gray-300 text-sm">
+                              <div>{startTime.toLocaleDateString()}</div>
+                              <div className="text-gray-500 text-xs">{startTime.toLocaleTimeString()}</div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                crawl.status === 'completed' 
+                                  ? 'bg-green-500/20 text-green-400' 
+                                  : crawl.status === 'stopped'
+                                  ? 'bg-orange-500/20 text-orange-400'
+                                  : 'bg-blue-500/20 text-blue-400'
+                              }`}>
+                                {crawl.status === 'completed' && <><i className="fas fa-check mr-1"></i>Completed</>}
+                                {crawl.status === 'stopped' && <><i className="fas fa-hand mr-1"></i>Stopped</>}
+                                {crawl.status === 'running' && <><i className="fas fa-spinner spinner mr-1"></i>Running</>}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-gray-300 font-semibold">
+                              {(crawl.pagesFound || 0).toLocaleString()}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`font-semibold ${crawl.errors > 0 ? 'text-red-400' : 'text-gray-500'}`}>
+                                {crawl.errors || 0}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-gray-300 text-sm">
+                              {duration ? (
+                                duration >= 60 
+                                  ? `${Math.floor(duration / 60)}m ${duration % 60}s`
+                                  : `${duration}s`
+                              ) : '-'}
+                            </td>
+                            <td className="px-4 py-3">
+                              <button
+                                onClick={() => handleDelete(crawl.id)}
+                                className="text-red-400 hover:text-red-300 transition-colors p-2"
+                                title="Delete crawl"
+                              >
+                                <i className="fas fa-trash"></i>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="text-center mt-8 text-gray-500 text-sm">
+              <p>All crawl data is stored locally in your browser using IndexedDB</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
