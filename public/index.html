@@ -151,6 +151,7 @@
       const [linkFilter, setLinkFilter] = useState('all'); // 'dead', 'healthy', 'all'
       const [linkCounts, setLinkCounts] = useState({ dead: 0, healthy: 0, all: 0 }); // Track counts
       const [showSitemapModal, setShowSitemapModal] = useState(false);
+      const [showScheduleModal, setShowScheduleModal] = useState(false);
       const [sitemapOptions, setSitemapOptions] = useState({ type: 'all', priority: 'manual' }); // type: 'all'|'healthy', priority: 'manual'|'intelligent'
 
       // Initialize IndexedDB on mount
@@ -456,6 +457,14 @@
                               <i className="fas fa-sitemap mr-2"></i>
                               Generate Sitemap
                             </button>
+                            <button
+                              onClick={() => setShowScheduleModal(true)}
+                              className="bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-semibold px-6 py-3 rounded-xl transition-all inline-flex items-center relative"
+                            >
+                              <i className="fas fa-calendar-alt mr-2"></i>
+                              Schedule Scans
+                              <span className="absolute -top-2 -right-2 bg-yellow-500 text-black text-xs font-bold px-2 py-1 rounded-full">Soon</span>
+                            </button>
                           </div>
                         )
                       )}
@@ -466,7 +475,7 @@
             )}
 
             {/* Results Table */}
-            {pages.length > 0 && (
+            {status && status.pagesFound > 0 && (
               <div className="glass rounded-2xl overflow-hidden">
                 {/* Table Header */}
                 <div className="p-4 border-b border-white/10 flex flex-col gap-4">
@@ -528,36 +537,20 @@
                   </div>
                 </div>
 
-                {/* Table */}
-                <div className="table-container overflow-x-auto max-h-[600px] overflow-y-auto">
-                  <table className="w-full">
-                    <thead className="bg-white/5 sticky top-0">
-                      <tr>
-                        <th className="text-left text-gray-400 font-medium px-4 py-3 text-sm">#</th>
-                        <th className="text-left text-gray-400 font-medium px-4 py-3 text-sm">URL</th>
-                        <th className="text-left text-gray-400 font-medium px-4 py-3 text-sm">Title</th>
-                        <th className="text-left text-gray-400 font-medium px-4 py-3 text-sm">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pages.length === 0 ? (
+                {/* Table Content or Empty State */}
+                {pages.length > 0 ? (
+                  <div className="table-container overflow-x-auto max-h-[600px] overflow-y-auto">
+                    <table className="w-full">
+                      <thead className="bg-white/5 sticky top-0">
                         <tr>
-                          <td colSpan="4" className="px-4 py-12 text-center">
-                            <div className="text-gray-500">
-                              <i className="fas fa-inbox text-4xl mb-3 block"></i>
-                              <p className="text-lg">No pages found matching the selected filter</p>
-                              {linkFilter !== 'all' && (
-                                <button
-                                  onClick={() => handleFilterChange('all')}
-                                  className="mt-4 text-purple-400 hover:text-purple-300 underline"
-                                >
-                                  View all pages
-                                </button>
-                              )}
-                            </div>
-                          </td>
+                          <th className="text-left text-gray-400 font-medium px-4 py-3 text-sm">#</th>
+                          <th className="text-left text-gray-400 font-medium px-4 py-3 text-sm">URL</th>
+                          <th className="text-left text-gray-400 font-medium px-4 py-3 text-sm">Title</th>
+                          <th className="text-left text-gray-400 font-medium px-4 py-3 text-sm">Status</th>
                         </tr>
-                      ) : pages.map((page, index) => (
+                      </thead>
+                      <tbody>
+                      {pages.map((page, index) => (
                         <tr key={page.url} className="border-t border-white/5 hover:bg-white/5 transition-colors">
                           <td className="px-4 py-3 text-gray-500 text-sm">
                             {(currentPage - 1) * 1000 + index + 1}
@@ -594,9 +587,25 @@
                           </td>
                         </tr>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="table-container p-12 text-center">
+                    <div className="text-gray-500">
+                      <i className="fas fa-inbox text-4xl mb-3 block"></i>
+                      <p className="text-lg">No pages found matching the selected filter</p>
+                      {linkFilter !== 'all' && (
+                        <button
+                          onClick={() => handleFilterChange('all')}
+                          className="mt-4 text-purple-400 hover:text-purple-300 underline"
+                        >
+                          View all pages
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Pagination */}
                 {pagination && pagination.totalPages > 1 && (
@@ -661,105 +670,184 @@
 
             {/* Sitemap Generation Modal */}
             {showSitemapModal && (
-              <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                <div className="glass rounded-2xl p-6 max-w-md w-full">
-                  <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-2xl font-bold text-white">
-                      <i className="fas fa-sitemap mr-2 text-blue-400"></i>
+              <div 
+                className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+                onClick={() => setShowSitemapModal(false)}
+              >
+                <div 
+                  className="glass rounded-2xl p-8 max-w-2xl w-full"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex justify-between items-center mb-8">
+                    <h3 className="text-3xl font-bold text-white">
+                      <i className="fas fa-sitemap mr-3 text-blue-400"></i>
                       Generate Sitemap
                     </h3>
                     <button
                       onClick={() => setShowSitemapModal(false)}
-                      className="text-gray-400 hover:text-white transition-colors"
+                      className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-lg"
                     >
-                      <i className="fas fa-times text-xl"></i>
+                      <i className="fas fa-times text-2xl"></i>
                     </button>
                   </div>
 
                   {/* Sitemap Type Selection */}
-                  <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-300 mb-3">
-                      <i className="fas fa-filter mr-2"></i>
+                  <div className="mb-8">
+                    <label className="block text-lg font-semibold text-gray-200 mb-4">
+                      <i className="fas fa-filter mr-2 text-purple-400"></i>
                       URL Selection
                     </label>
-                    <div className="space-y-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <button
                         onClick={() => setSitemapOptions({...sitemapOptions, type: 'all'})}
-                        className={`w-full px-4 py-3 rounded-lg font-medium transition-all text-left ${
+                        className={`px-6 py-4 rounded-xl font-medium transition-all text-left border-2 ${
                           sitemapOptions.type === 'all'
-                            ? 'bg-purple-600 text-white'
-                            : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                            ? 'bg-purple-600 text-white border-purple-400 shadow-lg shadow-purple-500/30'
+                            : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10 hover:border-white/20'
                         }`}
                       >
-                        <i className="fas fa-globe mr-2"></i>
-                        All URLs {linkCounts.all > 0 && `(${linkCounts.all})`}
+                        <i className="fas fa-globe text-2xl mb-2 block"></i>
+                        <div className="font-bold text-lg">All URLs</div>
+                        <div className="text-sm opacity-75 mt-1">{linkCounts.all > 0 ? `${linkCounts.all} pages` : 'Include all discovered pages'}</div>
                       </button>
                       <button
                         onClick={() => setSitemapOptions({...sitemapOptions, type: 'healthy'})}
-                        className={`w-full px-4 py-3 rounded-lg font-medium transition-all text-left ${
+                        className={`px-6 py-4 rounded-xl font-medium transition-all text-left border-2 ${
                           sitemapOptions.type === 'healthy'
-                            ? 'bg-green-600 text-white'
-                            : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                            ? 'bg-green-600 text-white border-green-400 shadow-lg shadow-green-500/30'
+                            : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10 hover:border-white/20'
                         }`}
                       >
-                        <i className="fas fa-check-circle mr-2"></i>
-                        Healthy Links Only {linkCounts.healthy > 0 && `(${linkCounts.healthy})`}
+                        <i className="fas fa-check-circle text-2xl mb-2 block"></i>
+                        <div className="font-bold text-lg">Healthy Links Only</div>
+                        <div className="text-sm opacity-75 mt-1">{linkCounts.healthy > 0 ? `${linkCounts.healthy} pages` : 'Only successful pages'}</div>
                       </button>
                     </div>
                   </div>
 
                   {/* Priority Strategy Selection */}
-                  <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-300 mb-3">
-                      <i className="fas fa-sort-amount-down mr-2"></i>
+                  <div className="mb-8">
+                    <label className="block text-lg font-semibold text-gray-200 mb-4">
+                      <i className="fas fa-sort-amount-down mr-2 text-purple-400"></i>
                       Priority Strategy
                     </label>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <button
                         onClick={() => setSitemapOptions({...sitemapOptions, priority: 'manual'})}
-                        className={`w-full px-4 py-3 rounded-lg font-medium transition-all text-left ${
+                        className={`w-full px-6 py-4 rounded-xl font-medium transition-all text-left border-2 ${
                           sitemapOptions.priority === 'manual'
-                            ? 'bg-purple-600 text-white'
-                            : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                            ? 'bg-purple-600 text-white border-purple-400 shadow-lg shadow-purple-500/30'
+                            : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10 hover:border-white/20'
                         }`}
                       >
-                        <i className="fas fa-equals mr-2"></i>
-                        <div>
-                          <div>Manual Priority</div>
-                          <div className="text-xs opacity-75 mt-1">All pages have equal priority (0.5)</div>
+                        <div className="flex items-start gap-4">
+                          <i className="fas fa-equals text-2xl mt-1"></i>
+                          <div className="flex-1">
+                            <div className="font-bold text-lg">Manual Priority</div>
+                            <div className="text-sm opacity-75 mt-1">All pages receive equal priority value of 0.5</div>
+                          </div>
                         </div>
                       </button>
                       <button
                         onClick={() => setSitemapOptions({...sitemapOptions, priority: 'intelligent'})}
-                        className={`w-full px-4 py-3 rounded-lg font-medium transition-all text-left ${
+                        className={`w-full px-6 py-4 rounded-xl font-medium transition-all text-left border-2 ${
                           sitemapOptions.priority === 'intelligent'
-                            ? 'bg-purple-600 text-white'
-                            : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                            ? 'bg-purple-600 text-white border-purple-400 shadow-lg shadow-purple-500/30'
+                            : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10 hover:border-white/20'
                         }`}
                       >
-                        <i className="fas fa-brain mr-2"></i>
-                        <div>
-                          <div>Intelligent Priority</div>
-                          <div className="text-xs opacity-75 mt-1">Product/parent pages get higher priority</div>
+                        <div className="flex items-start gap-4">
+                          <i className="fas fa-brain text-2xl mt-1"></i>
+                          <div className="flex-1">
+                            <div className="font-bold text-lg">Intelligent Priority</div>
+                            <div className="text-sm opacity-75 mt-1">Parent pages and important sections get higher priority (0.6-1.0)</div>
+                          </div>
                         </div>
                       </button>
                     </div>
                   </div>
 
                   {/* Actions */}
-                  <div className="flex gap-3">
+                  <div className="flex gap-4">
                     <button
                       onClick={() => setShowSitemapModal(false)}
-                      className="flex-1 px-4 py-3 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg font-medium transition-all"
+                      className="flex-1 px-6 py-4 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl font-semibold transition-all border border-white/10"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={generateSitemap}
-                      className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-medium transition-all"
+                      className="flex-1 px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-semibold transition-all shadow-lg shadow-blue-500/30"
                     >
                       <i className="fas fa-download mr-2"></i>
-                      Generate
+                      Generate Sitemap
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Schedule Scans Modal (Coming Soon) */}
+            {showScheduleModal && (
+              <div 
+                className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+                onClick={() => setShowScheduleModal(false)}
+              >
+                <div 
+                  className="glass rounded-2xl p-8 max-w-lg w-full"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-3xl font-bold text-white">
+                      <i className="fas fa-calendar-alt mr-3 text-orange-400"></i>
+                      Schedule Scans
+                    </h3>
+                    <button
+                      onClick={() => setShowScheduleModal(false)}
+                      className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-lg"
+                    >
+                      <i className="fas fa-times text-2xl"></i>
+                    </button>
+                  </div>
+
+                  <div className="text-center py-8">
+                    <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-orange-500 to-amber-500 rounded-full mb-6 shadow-lg shadow-orange-500/30">
+                      <i className="fas fa-rocket text-4xl text-white"></i>
+                    </div>
+                    
+                    <h4 className="text-2xl font-bold text-white mb-4">Coming Soon!</h4>
+                    <p className="text-gray-300 mb-8 text-lg">This feature is currently under development and will be available in the next update.</p>
+                    
+                    <div className="bg-white/5 rounded-xl p-6 mb-6 border border-white/10">
+                      <h5 className="text-lg font-semibold text-white mb-4 flex items-center justify-center">
+                        <i className="fas fa-sparkles mr-2 text-yellow-400"></i>
+                        Upcoming Features
+                      </h5>
+                      <ul className="text-left space-y-3 text-gray-300">
+                        <li className="flex items-start">
+                          <i className="fas fa-check text-green-400 mr-3 mt-1"></i>
+                          <span>Daily, weekly, or monthly scan schedules</span>
+                        </li>
+                        <li className="flex items-start">
+                          <i className="fas fa-check text-green-400 mr-3 mt-1"></i>
+                          <span>Automated email reports with detailed insights</span>
+                        </li>
+                        <li className="flex items-start">
+                          <i className="fas fa-check text-green-400 mr-3 mt-1"></i>
+                          <span>Change detection alerts for broken links</span>
+                        </li>
+                        <li className="flex items-start">
+                          <i className="fas fa-check text-green-400 mr-3 mt-1"></i>
+                          <span>Custom notification preferences</span>
+                        </li>
+                      </ul>
+                    </div>
+
+                    <button
+                      onClick={() => setShowScheduleModal(false)}
+                      className="px-8 py-4 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white rounded-xl font-semibold transition-all shadow-lg shadow-orange-500/30"
+                    >
+                      Got it, thanks!
                     </button>
                   </div>
                 </div>
