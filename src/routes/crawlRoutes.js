@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const WebCrawler = require('../crawler/WebCrawler');
 const { generateSessionId, getSession, setSession } = require('../services/sessionManager');
+const telemetryService = require('../services/telemetryService');
 
 // Start crawling
 router.post('/crawl', async (req, res) => {
@@ -14,14 +15,47 @@ router.post('/crawl', async (req, res) => {
   const sessionId = generateSessionId();
   const crawler = new WebCrawler(domain, maxPages);
   setSession(sessionId, crawler);
+
+  // Get client info for telemetry
+  const ip = req.headers['x-forwarded-for']?.split(',')[0] || 
+             req.headers['x-real-ip'] || 
+             req.socket.remoteAddress;
+  const userAgent = req.headers['user-agent'] || '';
+  const { browser, os } = telemetryService.parseUserAgent(userAgent);
+
+  // Log telemetry
+  const startTime = Date.now();
+  await telemetryService.logCrawl({
+    sessionId,
+    domain,
+    ip,
+    userAgent,
+    browser,
+    os,
+    status: 'started'
+  });
   
   // Start crawling in background
   crawler.crawl((progress) => {
     // Progress is tracked internally
   }).then(() => {
+    const duration = Math.round((Date.now() - startTime) / 1000); // seconds
     console.log(`Crawl completed for ${domain}: ${crawler.pages.length} pages found`);
+    
+    // Update telemetry with completion data
+    telemetryService.updateCrawl(sessionId, {
+      pagesFound: crawler.pages.length,
+      errors: crawler.getStatus().errors,
+      duration,
+      status: 'completed'
+    });
   }).catch(err => {
     console.error(`Crawl error for ${domain}:`, err);
+    
+    // Update telemetry with failure status
+    telemetryService.updateCrawl(sessionId, {
+      status: 'failed'
+    });
   });
   
   res.json({ sessionId, message: 'Crawl started' });
