@@ -148,8 +148,10 @@
       const [searchTerm, setSearchTerm] = useState('');
       const [isLoading, setIsLoading] = useState(false);
       const [error, setError] = useState(null);
-      const [linkFilter, setLinkFilter] = useState('dead'); // 'dead', 'healthy', 'all'
+      const [linkFilter, setLinkFilter] = useState('all'); // 'dead', 'healthy', 'all'
       const [linkCounts, setLinkCounts] = useState({ dead: 0, healthy: 0, all: 0 }); // Track counts
+      const [showSitemapModal, setShowSitemapModal] = useState(false);
+      const [sitemapOptions, setSitemapOptions] = useState({ type: 'all', priority: 'manual' }); // type: 'all'|'healthy', priority: 'manual'|'intelligent'
 
       // Initialize IndexedDB on mount
       useEffect(() => {
@@ -307,6 +309,30 @@
         }
       };
 
+      // Generate sitemap
+      const generateSitemap = async () => {
+        if (!sessionId) return;
+        
+        try {
+          const res = await fetch(
+            `${API_BASE}/api/crawl/${sessionId}/sitemap?type=${sitemapOptions.type}&priority=${sitemapOptions.priority}`
+          );
+          const blob = await res.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `sitemap-${sitemapOptions.type}-${sitemapOptions.priority}.xml`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+          setShowSitemapModal(false);
+        } catch (err) {
+          console.error('Error generating sitemap:', err);
+          alert('Failed to generate sitemap');
+        }
+      };
+
       return (
         <div className="min-h-screen p-4 md:p-8">
           <div className="max-w-7xl mx-auto">
@@ -415,13 +441,22 @@
                         </div>
                       ) : (
                         status.pagesFound > 0 && (
-                          <a
-                            href={`${API_BASE}/api/crawl/${sessionId}/download?filter=${linkFilter}`}
-                            className="bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 text-white font-semibold px-6 py-3 rounded-xl transition-all inline-flex items-center"
-                          >
-                            <i className="fas fa-download mr-2"></i>
-                            Download CSV ({linkFilter === 'dead' ? 'Dead Links' : linkFilter === 'healthy' ? 'Healthy Links' : 'All Links'})
-                          </a>
+                          <div className="flex gap-3">
+                            <a
+                              href={`${API_BASE}/api/crawl/${sessionId}/download?filter=${linkFilter}`}
+                              className="bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 text-white font-semibold px-6 py-3 rounded-xl transition-all inline-flex items-center"
+                            >
+                              <i className="fas fa-download mr-2"></i>
+                              Download CSV ({linkFilter === 'dead' ? 'Dead Links' : linkFilter === 'healthy' ? 'Healthy Links' : 'All Links'})
+                            </a>
+                            <button
+                              onClick={() => setShowSitemapModal(true)}
+                              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold px-6 py-3 rounded-xl transition-all inline-flex items-center"
+                            >
+                              <i className="fas fa-sitemap mr-2"></i>
+                              Generate Sitemap
+                            </button>
+                          </div>
                         )
                       )}
                     </div>
@@ -458,6 +493,17 @@
                   {/* Filter Buttons */}
                   <div className="flex gap-2 flex-wrap">
                     <button
+                      onClick={() => handleFilterChange('all')}
+                      className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                        linkFilter === 'all'
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                      }`}
+                    >
+                      <i className="fas fa-globe mr-2"></i>
+                      All URLs {linkCounts.all > 0 && `(${linkCounts.all})`}
+                    </button>
+                    <button
                       onClick={() => handleFilterChange('dead')}
                       className={`px-4 py-2 rounded-lg font-medium transition-all ${
                         linkFilter === 'dead'
@@ -479,17 +525,6 @@
                       <i className="fas fa-check-circle mr-2"></i>
                       Healthy Links {linkCounts.healthy > 0 && `(${linkCounts.healthy})`}
                     </button>
-                    <button
-                      onClick={() => handleFilterChange('all')}
-                      className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                        linkFilter === 'all'
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-white/5 text-gray-400 hover:bg-white/10'
-                      }`}
-                    >
-                      <i className="fas fa-globe mr-2"></i>
-                      All URLs {linkCounts.all > 0 && `(${linkCounts.all})`}
-                    </button>
                   </div>
                 </div>
 
@@ -505,7 +540,24 @@
                       </tr>
                     </thead>
                     <tbody>
-                      {pages.map((page, index) => (
+                      {pages.length === 0 ? (
+                        <tr>
+                          <td colSpan="4" className="px-4 py-12 text-center">
+                            <div className="text-gray-500">
+                              <i className="fas fa-inbox text-4xl mb-3 block"></i>
+                              <p className="text-lg">No pages found matching the selected filter</p>
+                              {linkFilter !== 'all' && (
+                                <button
+                                  onClick={() => handleFilterChange('all')}
+                                  className="mt-4 text-purple-400 hover:text-purple-300 underline"
+                                >
+                                  View all pages
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ) : pages.map((page, index) => (
                         <tr key={page.url} className="border-t border-white/5 hover:bg-white/5 transition-colors">
                           <td className="px-4 py-3 text-gray-500 text-sm">
                             {(currentPage - 1) * 1000 + index + 1}
@@ -606,6 +658,113 @@
             <div className="text-center mt-8 text-gray-500 text-sm">
               <p>Web Crawler respects robots.txt and uses polite crawling with delays</p>
             </div>
+
+            {/* Sitemap Generation Modal */}
+            {showSitemapModal && (
+              <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                <div className="glass rounded-2xl p-6 max-w-md w-full">
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-2xl font-bold text-white">
+                      <i className="fas fa-sitemap mr-2 text-blue-400"></i>
+                      Generate Sitemap
+                    </h3>
+                    <button
+                      onClick={() => setShowSitemapModal(false)}
+                      className="text-gray-400 hover:text-white transition-colors"
+                    >
+                      <i className="fas fa-times text-xl"></i>
+                    </button>
+                  </div>
+
+                  {/* Sitemap Type Selection */}
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-300 mb-3">
+                      <i className="fas fa-filter mr-2"></i>
+                      URL Selection
+                    </label>
+                    <div className="space-y-2">
+                      <button
+                        onClick={() => setSitemapOptions({...sitemapOptions, type: 'all'})}
+                        className={`w-full px-4 py-3 rounded-lg font-medium transition-all text-left ${
+                          sitemapOptions.type === 'all'
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                        }`}
+                      >
+                        <i className="fas fa-globe mr-2"></i>
+                        All URLs {linkCounts.all > 0 && `(${linkCounts.all})`}
+                      </button>
+                      <button
+                        onClick={() => setSitemapOptions({...sitemapOptions, type: 'healthy'})}
+                        className={`w-full px-4 py-3 rounded-lg font-medium transition-all text-left ${
+                          sitemapOptions.type === 'healthy'
+                            ? 'bg-green-600 text-white'
+                            : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                        }`}
+                      >
+                        <i className="fas fa-check-circle mr-2"></i>
+                        Healthy Links Only {linkCounts.healthy > 0 && `(${linkCounts.healthy})`}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Priority Strategy Selection */}
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-300 mb-3">
+                      <i className="fas fa-sort-amount-down mr-2"></i>
+                      Priority Strategy
+                    </label>
+                    <div className="space-y-2">
+                      <button
+                        onClick={() => setSitemapOptions({...sitemapOptions, priority: 'manual'})}
+                        className={`w-full px-4 py-3 rounded-lg font-medium transition-all text-left ${
+                          sitemapOptions.priority === 'manual'
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                        }`}
+                      >
+                        <i className="fas fa-equals mr-2"></i>
+                        <div>
+                          <div>Manual Priority</div>
+                          <div className="text-xs opacity-75 mt-1">All pages have equal priority (0.5)</div>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => setSitemapOptions({...sitemapOptions, priority: 'intelligent'})}
+                        className={`w-full px-4 py-3 rounded-lg font-medium transition-all text-left ${
+                          sitemapOptions.priority === 'intelligent'
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                        }`}
+                      >
+                        <i className="fas fa-brain mr-2"></i>
+                        <div>
+                          <div>Intelligent Priority</div>
+                          <div className="text-xs opacity-75 mt-1">Product/parent pages get higher priority</div>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowSitemapModal(false)}
+                      className="flex-1 px-4 py-3 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg font-medium transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={generateSitemap}
+                      className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-medium transition-all"
+                    >
+                      <i className="fas fa-download mr-2"></i>
+                      Generate
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       );
