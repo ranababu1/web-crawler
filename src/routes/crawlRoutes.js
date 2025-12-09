@@ -46,11 +46,24 @@ router.get('/crawl/:sessionId/pages', (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 1000;
   const search = req.query.search || '';
+  const filter = req.query.filter || 'all'; // 'dead', 'healthy', 'all'
   
   let filteredPages = crawler.pages;
+  
+  // Apply link status filter
+  if (filter === 'dead') {
+    // Dead links: errors with 404 or any error status
+    filteredPages = filteredPages.filter(p => p.status === 'error');
+  } else if (filter === 'healthy') {
+    // Healthy links: success status
+    filteredPages = filteredPages.filter(p => p.status === 'success');
+  }
+  // 'all' shows everything
+  
+  // Apply search filter
   if (search) {
     const searchLower = search.toLowerCase();
-    filteredPages = crawler.pages.filter(p => 
+    filteredPages = filteredPages.filter(p => 
       p.url.toLowerCase().includes(searchLower) || 
       p.title.toLowerCase().includes(searchLower)
     );
@@ -79,8 +92,19 @@ router.get('/crawl/:sessionId/download', (req, res) => {
     return res.status(404).json({ error: 'Session not found' });
   }
   
+  const filter = req.query.filter || 'all'; // 'dead', 'healthy', 'all'
+  
+  let filteredPages = crawler.pages;
+  
+  // Apply link status filter
+  if (filter === 'dead') {
+    filteredPages = filteredPages.filter(p => p.status === 'error');
+  } else if (filter === 'healthy') {
+    filteredPages = filteredPages.filter(p => p.status === 'success');
+  }
+  
   const csvHeader = 'URL,Title,Status,Error,Retry Count,Discovered At\n';
-  const csvRows = crawler.pages.map(p => {
+  const csvRows = filteredPages.map(p => {
     const escapedTitle = `"${(p.title || '').replace(/"/g, '""')}"`;
     const escapedUrl = `"${p.url.replace(/"/g, '""')}"`;
     const escapedError = p.error ? `"${p.error.replace(/"/g, '""')}"` : '';
@@ -90,8 +114,10 @@ router.get('/crawl/:sessionId/download', (req, res) => {
   
   const csv = csvHeader + csvRows;
   
+  const filterSuffix = filter === 'dead' ? '-dead-links' : filter === 'healthy' ? '-healthy-links' : '-all';
+  
   res.setHeader('Content-Type', 'text/csv');
-  res.setHeader('Content-Disposition', `attachment; filename="crawl-results-${req.params.sessionId}.csv"`);
+  res.setHeader('Content-Disposition', `attachment; filename="crawl-results-${req.params.sessionId}${filterSuffix}.csv"`);
   res.send(csv);
 });
 

@@ -19,6 +19,7 @@ class WebCrawler {
     this.maxRetries = 3;
     this.requestCount = 0;
     this.lastRequestTime = Date.now();
+    this.currentUrl = null; // Track currently crawling URL
   }
 
   normalizeUrl(url) {
@@ -203,6 +204,9 @@ class WebCrawler {
       }
       
       if (batch.length === 0) continue;
+      
+      // Track the first URL in the batch as current
+      this.currentUrl = batch[0] || null;
       
       const results = await Promise.allSettled(batch.map(url => this.fetchPage(url)));
       
@@ -393,7 +397,8 @@ class WebCrawler {
       isRunning: this.isRunning,
       pagesFound: this.pages.length,
       pagesQueued: this.toVisit.length,
-      errors: this.errors.length
+      errors: this.errors.length,
+      currentUrl: this.currentUrl
     };
   }
 }
